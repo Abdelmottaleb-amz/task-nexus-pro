@@ -17,15 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -55,12 +46,11 @@ const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    status: 'To Do' as const,
-    priority: 'Medium' as const,
+    status: 'To Do' as 'To Do' | 'In Progress' | 'Done',
+    priority: 'Medium' as 'Low' | 'Medium' | 'High',
     assignee: '',
     project: '',
   });
-  const [date, setDate] = useState<Date>();
 
   useEffect(() => {
     if (task) {
@@ -72,7 +62,6 @@ const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
         assignee: task.assignee,
         project: task.project,
       });
-      setDate(new Date(task.dueDate));
     }
   }, [task]);
 
@@ -87,7 +76,6 @@ const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
       priority: formData.priority,
       assignee: formData.assignee,
       project: formData.project,
-      dueDate: date ? date.toISOString() : task.dueDate,
     };
 
     onEditTask(updatedTask);
@@ -161,70 +149,6 @@ const EditTaskDialog: React.FC<EditTaskDialogProps> = ({
                 </SelectContent>
               </Select>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="assignee">Assignee</Label>
-              <Select
-                value={formData.assignee}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, assignee: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="JD">John Doe (JD)</SelectItem>
-                  <SelectItem value="SM">Sarah Miller (SM)</SelectItem>
-                  <SelectItem value="AK">Alex Kim (AK)</SelectItem>
-                  <SelectItem value="LM">Lisa Martinez (LM)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="project">Project</Label>
-              <Select
-                value={formData.project}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, project: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Website Redesign">Website Redesign</SelectItem>
-                  <SelectItem value="Mobile App">Mobile App</SelectItem>
-                  <SelectItem value="Marketing Campaign">Marketing Campaign</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Due Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, "PPP") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

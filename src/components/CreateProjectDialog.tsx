@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Calendar, CalendarIcon } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import {
   Popover,
@@ -50,7 +50,7 @@ const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    status: 'Planning' as const,
+    status: 'Planning' as 'Planning' | 'In Progress' | 'On Hold' | 'Completed',
     dueDate: '',
   });
   const [date, setDate] = useState<Date>();

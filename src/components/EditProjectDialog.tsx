@@ -17,15 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CalendarIcon } from 'lucide-react';
-import { format } from 'date-fns';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
-import { cn } from '@/lib/utils';
+import { Slider } from '@/components/ui/slider';
 
 interface Project {
   id: string;
@@ -54,10 +46,9 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    status: 'Planning' as const,
+    status: 'Planning' as 'Planning' | 'In Progress' | 'On Hold' | 'Completed',
     progress: 0,
   });
-  const [date, setDate] = useState<Date>();
 
   useEffect(() => {
     if (project) {
@@ -67,7 +58,6 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
         status: project.status,
         progress: project.progress,
       });
-      setDate(new Date(project.dueDate));
     }
   }, [project]);
 
@@ -80,7 +70,6 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
       description: formData.description,
       status: formData.status,
       progress: formData.progress,
-      dueDate: date ? date.toISOString() : project.dueDate,
     };
 
     onEditProject(updatedProject);
@@ -137,42 +126,14 @@ const EditProjectDialog: React.FC<EditProjectDialogProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="progress">Progress (%)</Label>
-            <Input
-              id="progress"
-              type="number"
-              min="0"
-              max="100"
-              value={formData.progress}
-              onChange={(e) => setFormData(prev => ({ ...prev, progress: parseInt(e.target.value) || 0 }))}
+            <Label>Progress: {formData.progress}%</Label>
+            <Slider
+              value={[formData.progress]}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, progress: value[0] }))}
+              max={100}
+              step={5}
+              className="w-full"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label>Due Date</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !date && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {date ? format(date, "PPP") : <span>Pick a date</span>}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <CalendarComponent
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  initialFocus
-                  className={cn("p-3 pointer-events-auto")}
-                />
-              </PopoverContent>
-            </Popover>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">

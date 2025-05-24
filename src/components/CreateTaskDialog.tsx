@@ -51,8 +51,8 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    status: 'To Do' as const,
-    priority: 'Medium' as const,
+    status: 'To Do' as 'To Do' | 'In Progress' | 'Done',
+    priority: 'Medium' as 'Low' | 'Medium' | 'High',
     assignee: 'JD',
     project: 'Website Redesign',
   });
@@ -150,43 +150,6 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                   <SelectItem value="Low">Low</SelectItem>
                   <SelectItem value="Medium">Medium</SelectItem>
                   <SelectItem value="High">High</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="assignee">Assignee</Label>
-              <Select
-                value={formData.assignee}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, assignee: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="JD">John Doe (JD)</SelectItem>
-                  <SelectItem value="SM">Sarah Miller (SM)</SelectItem>
-                  <SelectItem value="AK">Alex Kim (AK)</SelectItem>
-                  <SelectItem value="LM">Lisa Martinez (LM)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="project">Project</Label>
-              <Select
-                value={formData.project}
-                onValueChange={(value) => setFormData(prev => ({ ...prev, project: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Website Redesign">Website Redesign</SelectItem>
-                  <SelectItem value="Mobile App">Mobile App</SelectItem>
-                  <SelectItem value="Marketing Campaign">Marketing Campaign</SelectItem>
                 </SelectContent>
               </Select>
             </div>
