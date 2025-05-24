@@ -8,6 +8,9 @@ import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import Projects from "./pages/Projects";
 import Tasks from "./pages/Tasks";
+import Calendar from "./pages/Calendar";
+import Team from "./pages/Team";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +25,9 @@ const App = () => (
           <Route path="/" element={<Layout><Dashboard /></Layout>} />
           <Route path="/projects" element={<Layout><Projects /></Layout>} />
           <Route path="/tasks" element={<Layout><Tasks /></Layout>} />
+          <Route path="/calendar" element={<Layout><Calendar /></Layout>} />
+          <Route path="/team" element={<Layout><Team /></Layout>} />
+          <Route path="/settings" element={<Layout><Settings /></Layout>} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
