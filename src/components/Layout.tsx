@@ -3,7 +3,6 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import Header from './Header';
-import Sidebar from './Sidebar';
 
 const Layout = ({ children }: { children: React.ReactNode }) => {
   const { user, loading } = useAuth();
@@ -23,12 +22,9 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 p-6 ml-64">
-          {children}
-        </main>
-      </div>
+      <main className="p-6">
+        {children}
+      </main>
     </div>
   );
 };
