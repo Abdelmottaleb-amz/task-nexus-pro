@@ -3,78 +3,77 @@ import React from 'react';
 import { Calendar, CheckCircle, Clock, Users, TrendingUp, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useProjects } from '@/hooks/useProjects';
-import { useTasks } from '@/hooks/useTasks';
-import { useAuth } from '@/hooks/useAuth';
+import { Progress } from '@/components/ui/progress';
 import ProjectCard from './ProjectCard';
 import TaskList from './TaskList';
 import RecentActivity from './RecentActivity';
 
 const Dashboard = () => {
-  const { user } = useAuth();
-  const { projects, isLoading: projectsLoading } = useProjects();
-  const { tasks, isLoading: tasksLoading } = useTasks();
-
-  // Calculate statistics from real data
-  const activeProjects = projects.filter(p => p.status === 'active').length;
-  const activeTasks = tasks.filter(t => t.status !== 'completed').length;
-  const dueSoonTasks = tasks.filter(t => {
-    if (!t.due_date) return false;
-    const dueDate = new Date(t.due_date);
-    const nextWeek = new Date();
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    return dueDate <= nextWeek && t.status !== 'completed';
-  }).length;
-
+  // Mock data - would come from API in real app
   const stats = [
     {
-      title: 'Active Projects',
-      value: activeProjects.toString(),
-      change: `${projects.length} total`,
+      title: 'Total Projects',
+      value: '12',
+      change: '+2 this month',
       icon: Calendar,
       color: 'bg-blue-500',
     },
     {
       title: 'Active Tasks',
-      value: activeTasks.toString(),
-      change: `${tasks.length} total`,
+      value: '47',
+      change: '+8 this week',
       icon: CheckCircle,
       color: 'bg-green-500',
     },
     {
       title: 'Due Soon',
-      value: dueSoonTasks.toString(),
+      value: '5',
       change: 'Next 7 days',
       icon: Clock,
       color: 'bg-orange-500',
     },
     {
-      title: 'My Tasks',
-      value: tasks.filter(t => t.assigned_to === user?.id).length.toString(),
-      change: 'Assigned to me',
+      title: 'Team Members',
+      value: '24',
+      change: '+3 this month',
       icon: Users,
       color: 'bg-purple-500',
     },
   ];
 
-  const recentProjects = projects.slice(0, 3);
-
-  if (projectsLoading || tasksLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-lg">Loading dashboard...</div>
-      </div>
-    );
-  }
+  const recentProjects = [
+    {
+      id: '1',
+      name: 'Website Redesign',
+      progress: 75,
+      dueDate: '2024-06-15',
+      team: ['JD', 'SM', 'AK'],
+      status: 'In Progress',
+    },
+    {
+      id: '2',
+      name: 'Mobile App Development',
+      progress: 45,
+      dueDate: '2024-07-20',
+      team: ['JD', 'LM'],
+      status: 'In Progress',
+    },
+    {
+      id: '3',
+      name: 'Marketing Campaign',
+      progress: 90,
+      dueDate: '2024-05-30',
+      team: ['SM', 'RB', 'NK'],
+      status: 'Nearly Complete',
+    },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">
-            Good morning, {user?.email?.split('@')[0]}! 👋
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900">Good morning, John! 👋</h1>
           <p className="text-gray-600 mt-1">Here's what's happening with your projects today.</p>
         </div>
         <Button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700">
@@ -120,15 +119,9 @@ const Dashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentProjects.length > 0 ? (
-                recentProjects.map((project) => (
-                  <ProjectCard key={project.id} project={project} />
-                ))
-              ) : (
-                <p className="text-gray-500 text-center py-8">
-                  No projects yet. Create your first project to get started!
-                </p>
-              )}
+              {recentProjects.map((project) => (
+                <ProjectCard key={project.id} project={project} />
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -163,8 +156,8 @@ const Dashboard = () => {
 
       {/* Task Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <TaskList title="My Tasks" />
-        <TaskList title="Due Soon" showAlert />
+        <TaskList title="Tasks Due Today" />
+        <TaskList title="Overdue Tasks" showAlert />
       </div>
     </div>
   );
