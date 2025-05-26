@@ -2,10 +2,12 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import Header from './Header';
-import Sidebar from './Sidebar';
 
-const Layout = ({ children }: { children: React.ReactNode }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -20,17 +22,7 @@ const Layout = ({ children }: { children: React.ReactNode }) => {
     return <Navigate to="/auth" replace />;
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="flex">
-        <Sidebar />
-        <main className="flex-1 p-6 ml-64">
-          {children}
-        </main>
-      </div>
-    </div>
-  );
+  return <>{children}</>;
 };
 
-export default Layout;
+export default ProtectedRoute;

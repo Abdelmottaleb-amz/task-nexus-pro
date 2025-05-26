@@ -9,75 +9,120 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      projects: {
+      profiles: {
         Row: {
-          created_at: string
-          description: string | null
-          id: number
-          owner_id: number | null
-          title: string | null
+          avatar_url: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string | null
+          role: string | null
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          description?: string | null
-          id?: number
-          owner_id?: number | null
-          title?: string | null
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          id: string
+          name?: string | null
+          role?: string | null
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
+          avatar_url?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string | null
+          role?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          owner_id: string
+          priority: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
           description?: string | null
-          id?: number
-          owner_id?: number | null
-          title?: string | null
+          id?: string
+          owner_id: string
+          priority?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          owner_id?: string
+          priority?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "projects_owner_id_fkey"
             columns: ["owner_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
       }
       tasks: {
         Row: {
-          assigned_to: number | null
-          created_at: string
+          assigned_to: string | null
+          created_at: string | null
           description: string | null
           due_date: string | null
-          id: number
-          project_id: number | null
+          id: string
+          priority: string | null
+          project_id: string | null
           status: string | null
-          title: string | null
+          title: string
+          updated_at: string | null
         }
         Insert: {
-          assigned_to?: number | null
-          created_at?: string
+          assigned_to?: string | null
+          created_at?: string | null
           description?: string | null
           due_date?: string | null
-          id?: number
-          project_id?: number | null
+          id?: string
+          priority?: string | null
+          project_id?: string | null
           status?: string | null
-          title?: string | null
+          title: string
+          updated_at?: string | null
         }
         Update: {
-          assigned_to?: number | null
-          created_at?: string
+          assigned_to?: string | null
+          created_at?: string | null
           description?: string | null
           due_date?: string | null
-          id?: number
-          project_id?: number | null
+          id?: string
+          priority?: string | null
+          project_id?: string | null
           status?: string | null
-          title?: string | null
+          title?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "tasks_assigned_to_fkey"
             columns: ["assigned_to"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
