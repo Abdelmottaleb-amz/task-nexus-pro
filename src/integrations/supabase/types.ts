@@ -11,35 +11,36 @@ export type Database = {
     Tables: {
       projects: {
         Row: {
-          created_at: string
+          id: string
+          name: string
           description: string | null
-          id: number
-          owner_id: number | null
-          title: string | null
+          status: string
+          progress: number
+          due_date: string | null
+          team_members: string[] | null
+          created_at: string
         }
         Insert: {
-          created_at?: string
+          id?: string
+          name: string
           description?: string | null
-          id?: number
-          owner_id?: number | null
-          title?: string | null
+          status?: string
+          progress?: number
+          due_date?: string | null
+          team_members?: string[] | null
+          created_at?: string
         }
         Update: {
-          created_at?: string
+          id?: string
+          name?: string
           description?: string | null
-          id?: number
-          owner_id?: number | null
-          title?: string | null
+          status?: string
+          progress?: number
+          due_date?: string | null
+          team_members?: string[] | null
+          created_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "projects_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       tasks: {
         Row: {

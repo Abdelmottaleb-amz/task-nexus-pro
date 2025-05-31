@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreHorizontal, Calendar, Users, Edit, Trash } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +14,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import CreateProjectDialog from '../components/CreateProjectDialog';
 import EditProjectDialog from '../components/EditProjectDialog';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Project {
   id: string;
@@ -28,44 +28,57 @@ interface Project {
 }
 
 const Projects = () => {
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: '1',
-      name: 'Website Redesign',
-      description: 'Complete overhaul of company website with modern design',
-      status: 'In Progress',
-      progress: 75,
-      dueDate: '2024-06-15',
-      teamMembers: ['JD', 'SM', 'AK'],
-      createdAt: '2024-01-15',
-    },
-    {
-      id: '2',
-      name: 'Mobile App Development',
-      description: 'Native mobile application for iOS and Android',
-      status: 'Planning',
-      progress: 25,
-      dueDate: '2024-08-20',
-      teamMembers: ['JD', 'LM', 'RB'],
-      createdAt: '2024-02-01',
-    },
-    {
-      id: '3',
-      name: 'Marketing Campaign Q2',
-      description: 'Digital marketing campaign for Q2 product launch',
-      status: 'Completed',
-      progress: 100,
-      dueDate: '2024-05-30',
-      teamMembers: ['SM', 'NK', 'AK'],
-      createdAt: '2024-03-10',
-    },
-  ]);
-
+  const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, description, status, progress, due_date, team_members, created_at');
+
+      if (error) {
+        console.error('Error fetching projects:', error);
+        console.error('Error details:', error.message, error.details, error.hint);
+        return [];
+      }
+
+      console.log('Raw data from Supabase:', data);
+
+      if (!data) {
+        console.log('No data returned from Supabase');
+        return [];
+      }
+
+      return data.map(project => ({
+        id: project.id,
+        name: project.name || '',
+        description: project.description || '',
+        status: project.status || 'Planning',
+        progress: project.progress || 0,
+        dueDate: project.due_date || new Date().toISOString(),
+        teamMembers: project.team_members || [], // Add fallback for NULL values
+        createdAt: project.created_at,
+      }));
+    } catch (err) {
+      console.error('Exception in fetchProjects:', err);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    const loadProjects = async () => {
+      const fetchedProjects = await fetchProjects();
+      console.log('Fetched projects:', fetchedProjects);
+      setProjects(fetchedProjects);
+    };
+
+    loadProjects();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -84,27 +97,85 @@ const Projects = () => {
 
   const filteredProjects = projects.filter(project => {
     const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description.toLowerCase().includes(searchTerm.toLowerCase());
+                         (project.description && project.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'All' || project.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreateProject = (newProject: Omit<Project, 'id' | 'createdAt'>) => {
-    const project: Project = {
-      ...newProject,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    setProjects(prev => [...prev, project]);
+  const handleCreateProject = async (newProject: Omit<Project, 'id' | 'createdAt'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert({
+          name: newProject.name,
+          description: newProject.description,
+          status: newProject.status,
+          progress: newProject.progress,
+          due_date: newProject.dueDate,
+          team_members: newProject.teamMembers,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating project:', error);
+        return;
+      }
+
+      // Refresh the projects list
+      const fetchedProjects = await fetchProjects();
+      setProjects(fetchedProjects);
+    } catch (error) {
+      console.error('Error creating project:', error);
+    }
   };
 
-  const handleEditProject = (updatedProject: Project) => {
-    setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
-    setSelectedProject(null);
+  const handleEditProject = async (updatedProject: Project) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          name: updatedProject.name,
+          description: updatedProject.description,
+          status: updatedProject.status,
+          progress: updatedProject.progress,
+          due_date: updatedProject.dueDate,
+          team_members: updatedProject.teamMembers,
+        })
+        .eq('id', updatedProject.id);
+
+      if (error) {
+        console.error('Error updating project:', error);
+        return;
+      }
+
+      // Refresh the projects list
+      const fetchedProjects = await fetchProjects();
+      setProjects(fetchedProjects);
+      setSelectedProject(null);
+    } catch (error) {
+      console.error('Error updating project:', error);
+    }
   };
 
-  const handleDeleteProject = (projectId: string) => {
-    setProjects(prev => prev.filter(p => p.id !== projectId));
+  const handleDeleteProject = async (projectId: string) => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+
+      if (error) {
+        console.error('Error deleting project:', error);
+        return;
+      }
+
+      // Refresh the projects list
+      const fetchedProjects = await fetchProjects();
+      setProjects(fetchedProjects);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+    }
   };
 
   return (
@@ -168,7 +239,7 @@ const Projects = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => {
                         setSelectedProject(project);
                         setEditDialogOpen(true);
@@ -177,7 +248,7 @@ const Projects = () => {
                       <Edit className="mr-2 h-4 w-4" />
                       Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={() => handleDeleteProject(project.id)}
                       className="text-red-600"
                     >
@@ -189,8 +260,8 @@ const Projects = () => {
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <p className="text-sm text-gray-600 line-clamp-2">{project.description}</p>
-              
+              <p className="text-sm text-gray-600 line-clamp-2">{project.description || 'No description available'}</p>
+
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-gray-700">Progress</span>
@@ -229,8 +300,8 @@ const Projects = () => {
         <div className="text-center py-12">
           <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
           <p className="text-gray-600 mb-4">
-            {searchTerm || statusFilter !== 'All' 
-              ? 'Try adjusting your search or filters' 
+            {searchTerm || statusFilter !== 'All'
+              ? 'Try adjusting your search or filters'
               : 'Get started by creating your first project'
             }
           </p>
@@ -243,14 +314,14 @@ const Projects = () => {
         </div>
       )}
 
-      <CreateProjectDialog 
+      <CreateProjectDialog
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         onCreateProject={handleCreateProject}
       />
 
       {selectedProject && (
-        <EditProjectDialog 
+        <EditProjectDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
           project={selectedProject}
