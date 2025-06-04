@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreHorizontal, Calendar, User, Edit, Trash, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import CreateTaskDialog from '../components/CreateTaskDialog';
 import EditTaskDialog from '../components/EditTaskDialog';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Task {
   id: string;
@@ -25,50 +26,69 @@ interface Task {
   project: string;
   dueDate: string;
   createdAt: string;
+  // Database fields (for mapping)
+  assigned_to?: number | null;
+  due_date?: string | null;
+  project_id?: number | null;
+  created_at?: string;
 }
 
 const Tasks = () => {
-  const [tasks, setTasks] = useState<Task[]>([
-    {
-      id: '1',
-      title: 'Design homepage wireframes',
-      description: 'Create detailed wireframes for the new homepage layout',
-      status: 'In Progress',
-      priority: 'High',
-      assignee: 'JD',
-      project: 'Website Redesign',
-      dueDate: '2024-05-25',
-      createdAt: '2024-05-20',
-    },
-    {
-      id: '2',
-      title: 'Set up authentication system',
-      description: 'Implement user login and registration functionality',
-      status: 'To Do',
-      priority: 'High',
-      assignee: 'SM',
-      project: 'Mobile App',
-      dueDate: '2024-05-26',
-      createdAt: '2024-05-21',
-    },
-    {
-      id: '3',
-      title: 'Write marketing copy',
-      description: 'Create compelling copy for the marketing campaign',
-      status: 'Done',
-      priority: 'Medium',
-      assignee: 'AK',
-      project: 'Marketing Campaign',
-      dueDate: '2024-05-24',
-      createdAt: '2024-05-18',
-    },
-  ]);
-
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+
+  // Fetch tasks from database
+  const fetchTasks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('id, title, description, status, due_date, project_id, assigned_to, created_at');
+
+      if (error) {
+        console.error('Error fetching tasks:', error);
+        return [];
+      }
+
+      console.log('Raw tasks data from Supabase:', data);
+
+      if (!data) {
+        console.log('No tasks data returned from Supabase');
+        return [];
+      }
+
+      // Map database fields to frontend interface
+      return data.map(task => ({
+        id: task.id.toString(),
+        title: task.title || '',
+        description: task.description || '',
+        status: (task.status as 'To Do' | 'In Progress' | 'Done') || 'To Do',
+        priority: 'Medium' as 'Low' | 'Medium' | 'High', // Default priority since not in DB
+        assignee: task.assigned_to ? `User${task.assigned_to}` : 'Unassigned',
+        project: task.project_id ? `Project${task.project_id}` : 'No Project',
+        dueDate: task.due_date || new Date().toISOString(),
+        createdAt: task.created_at || new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error('Exception in fetchTasks:', err);
+      return [];
+    }
+  };
+
+  // Load tasks on component mount
+  useEffect(() => {
+    const loadTasks = async () => {
+      const fetchedTasks = await fetchTasks();
+      console.log('Fetched tasks:', fetchedTasks);
+      setTasks(fetchedTasks);
+    };
+
+    loadTasks();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -98,31 +118,111 @@ const Tasks = () => {
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description.toLowerCase().includes(searchTerm.toLowerCase());
+                         (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'All' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreateTask = (newTask: Omit<Task, 'id' | 'createdAt'>) => {
-    const task: Task = {
-      ...newTask,
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-    };
-    setTasks(prev => [...prev, task]);
+  const handleCreateTask = async (newTask: Omit<Task, 'id' | 'createdAt'>) => {
+    try {
+      const { data, error } = await supabase
+        .from('tasks')
+        .insert({
+          title: newTask.title,
+          description: newTask.description,
+          status: newTask.status,
+          due_date: newTask.dueDate,
+          project_id: null, // Will be updated when projects are linked
+          assigned_to: null, // Will be updated when users are linked
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating task:', error);
+        alert(`Error creating task: ${error.message}`);
+        return;
+      }
+
+      // Refresh the tasks list
+      const fetchedTasks = await fetchTasks();
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error('Error creating task:', error);
+      alert(`Error creating task: ${error}`);
+    }
   };
 
-  const handleEditTask = (updatedTask: Task) => {
-    setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    setSelectedTask(null);
+  const handleEditTask = async (updatedTask: Task) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({
+          title: updatedTask.title,
+          description: updatedTask.description,
+          status: updatedTask.status,
+          due_date: updatedTask.dueDate,
+        })
+        .eq('id', parseInt(updatedTask.id));
+
+      if (error) {
+        console.error('Error updating task:', error);
+        alert(`Error updating task: ${error.message}`);
+        return;
+      }
+
+      // Refresh the tasks list
+      const fetchedTasks = await fetchTasks();
+      setTasks(fetchedTasks);
+      setSelectedTask(null);
+    } catch (error) {
+      console.error('Error updating task:', error);
+      alert(`Error updating task: ${error}`);
+    }
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', parseInt(taskId));
+
+      if (error) {
+        console.error('Error deleting task:', error);
+        alert(`Error deleting task: ${error.message}`);
+        return;
+      }
+
+      // Refresh the tasks list
+      const fetchedTasks = await fetchTasks();
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      alert(`Error deleting task: ${error}`);
+    }
   };
 
-  const handleStatusChange = (taskId: string, newStatus: Task['status']) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+  const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
+    try {
+      const { error } = await supabase
+        .from('tasks')
+        .update({ status: newStatus })
+        .eq('id', parseInt(taskId));
+
+      if (error) {
+        console.error('Error updating task status:', error);
+        alert(`Error updating task status: ${error.message}`);
+        return;
+      }
+
+      // Refresh the tasks list
+      const fetchedTasks = await fetchTasks();
+      setTasks(fetchedTasks);
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      alert(`Error updating task status: ${error}`);
+    }
   };
 
   return (
@@ -133,10 +233,12 @@ const Tasks = () => {
           <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
           <p className="text-gray-600 mt-1">Manage and track individual tasks</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Task
-        </Button>
+        <div className="flex space-x-2">
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            New Task
+          </Button>
+        </div>
       </div>
 
       {/* Filters and Search */}
@@ -193,7 +295,7 @@ const Tasks = () => {
                     </Badge>
                   </div>
                   
-                  <p className="text-gray-600 mb-3">{task.description}</p>
+                  <p className="text-gray-600 mb-3">{task.description || 'No description available'}</p>
                   
                   <div className="flex items-center space-x-6 text-sm text-gray-500">
                     <div className="flex items-center">
