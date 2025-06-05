@@ -19,6 +19,8 @@ export type Database = {
           due_date: string | null
           team_members: string[] | null
           created_at: string
+          owner_id: string
+          access_code: string | null
         }
         Insert: {
           id?: string
@@ -29,6 +31,8 @@ export type Database = {
           due_date?: string | null
           team_members?: string[] | null
           created_at?: string
+          owner_id: string
+          access_code?: string | null
         }
         Update: {
           id?: string
@@ -39,6 +43,8 @@ export type Database = {
           due_date?: string | null
           team_members?: string[] | null
           created_at?: string
+          owner_id?: string
+          access_code?: string | null
         }
         Relationships: []
       }
