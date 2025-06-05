@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Filter, MoreHorizontal, Calendar, Users, Edit, Trash, Crown, Share2, UserPlus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ interface Project {
 
 const Projects = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -331,7 +333,11 @@ const Projects = () => {
           {/* Projects Grid for Owned Projects */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <Card key={project.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={project.id}
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => navigate(`/projects/${project.id}`)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -343,7 +349,7 @@ const Projects = () => {
                         {project.status}
                       </Badge>
                     </div>
-                    <div className="flex items-center space-x-1">
+                    <div className="flex items-center space-x-1" onClick={(e) => e.stopPropagation()}>
                       {project.isOwner && project.accessCode && (
                         <ShareProjectDialog project={project} />
                       )}
@@ -432,7 +438,11 @@ const Projects = () => {
           {/* Projects Grid for Team Projects */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProjects.map((project) => (
-              <Card key={project.id} className="hover:shadow-lg transition-shadow">
+              <Card
+                key={project.id}
+                className="hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => navigate(`/projects/${project.id}`)}
+              >
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -441,19 +451,21 @@ const Projects = () => {
                         {project.status}
                       </Badge>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem disabled>
                           <Users className="mr-2 h-4 w-4" />
                           Team Member
                         </DropdownMenuItem>
                       </DropdownMenuContent>
-                    </DropdownMenu>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">

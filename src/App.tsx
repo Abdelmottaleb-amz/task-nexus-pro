@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
 import Projects from "./pages/Projects";
+import ProjectDetails from "./pages/ProjectDetails";
 import Tasks from "./pages/Tasks";
 import Calendar from "./pages/Calendar";
 import Team from "./pages/Team";
@@ -42,6 +43,11 @@ const App = () => (
             <Route path="/projects" element={
               <ProtectedRoute>
                 <Layout><Projects /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/projects/:projectId" element={
+              <ProtectedRoute>
+                <Layout><ProjectDetails /></Layout>
               </ProtectedRoute>
             } />
             <Route path="/tasks" element={
