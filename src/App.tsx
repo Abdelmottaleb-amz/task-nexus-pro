@@ -12,6 +12,11 @@ import Calendar from "./pages/Calendar";
 import Team from "./pages/Team";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import ForgotPassword from "./pages/ForgotPassword";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { AuthProvider } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
@@ -21,16 +26,49 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout><Dashboard /></Layout>} />
-          <Route path="/projects" element={<Layout><Projects /></Layout>} />
-          <Route path="/tasks" element={<Layout><Tasks /></Layout>} />
-          <Route path="/calendar" element={<Layout><Calendar /></Layout>} />
-          <Route path="/team" element={<Layout><Team /></Layout>} />
-          <Route path="/settings" element={<Layout><Settings /></Layout>} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+
+            {/* Protected routes */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Layout><Dashboard /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/projects" element={
+              <ProtectedRoute>
+                <Layout><Projects /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/tasks" element={
+              <ProtectedRoute>
+                <Layout><Tasks /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/calendar" element={
+              <ProtectedRoute>
+                <Layout><Calendar /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/team" element={
+              <ProtectedRoute>
+                <Layout><Team /></Layout>
+              </ProtectedRoute>
+            } />
+            <Route path="/settings" element={
+              <ProtectedRoute>
+                <Layout><Settings /></Layout>
+              </ProtectedRoute>
+            } />
+
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

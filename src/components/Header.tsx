@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface HeaderProps {
   onMenuClick: () => void;
@@ -19,12 +20,15 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
 
-  const handleLogout = () => {
-    // For now, we'll just redirect to login
-    // When Supabase is connected, this will handle actual logout
-    console.log('Logout clicked - implement with Supabase auth');
-    alert('Logout functionality will be implemented with Supabase authentication');
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   const handleProfileClick = () => {
@@ -70,10 +74,15 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="flex items-center space-x-2">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/placeholder.svg" alt="User" />
-                  <AvatarFallback>JD</AvatarFallback>
+                  <AvatarImage src={user?.user_metadata?.avatar_url} alt="User" />
+                  <AvatarFallback>
+                    {user?.user_metadata?.full_name?.charAt(0)?.toUpperCase() ||
+                     user?.email?.charAt(0)?.toUpperCase() || 'U'}
+                  </AvatarFallback>
                 </Avatar>
-                <span className="hidden md:block font-medium">John Doe</span>
+                <span className="hidden md:block font-medium">
+                  {user?.user_metadata?.full_name || user?.email || 'User'}
+                </span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
