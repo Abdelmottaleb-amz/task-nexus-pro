@@ -6,48 +6,83 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'To Do' | 'In Progress' | 'Done';
-  dueDate: string;
-  assignee: string;
-  project: string;
-  createdAt: string;
+  status: 'To Do' | 'In Progress' | 'Completed';
+  due_date: string;
+  assigned_to: string | null;
+  project_id: string;
+  project_name?: string;
+  created_at?: string;
 }
 
 const Calendar = () => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
 
-  // Fetch tasks from database
+  // Fetch tasks from projects where user is involved
   const fetchTasks = async () => {
+    if (!user) return;
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from('tasks')
-        .select('id, title, description, status, due_date, project_id, assigned_to, created_at');
+        .select(`
+          id,
+          title,
+          description,
+          status,
+          due_date,
+          project_id,
+          assigned_to,
+          created_at,
+          projects (
+            name,
+            owner_id,
+            team_members
+          )
+        `)
+        .not('projects', 'is', null)
+        .order('due_date', { ascending: true });
 
       if (error) {
-        console.error('Error fetching tasks:', error);
+        console.error('Error fetching calendar tasks:', error);
         return;
       }
 
       if (data) {
+        // Filter tasks from projects where user is involved (owner or team member)
+        const userTasks = data.filter(task => {
+          if (!task.projects) return false;
+
+          const isOwner = task.projects.owner_id === user.id;
+          const isTeamMember = task.projects.team_members &&
+            (task.projects.team_members.includes(user.email) ||
+             task.projects.team_members.includes(user.id));
+
+          return isOwner || isTeamMember;
+        });
+
         // Map database fields to frontend interface
-        const mappedTasks = data.map(task => ({
+        const mappedTasks = userTasks.map(task => ({
           id: task.id.toString(),
           title: task.title || '',
           description: task.description || '',
-          status: (task.status as 'To Do' | 'In Progress' | 'Done') || 'To Do',
-          dueDate: task.due_date || new Date().toISOString(),
-          assignee: task.assigned_to ? `User${task.assigned_to}` : 'Unassigned',
-          project: task.project_id ? `Project${task.project_id}` : 'No Project',
-          createdAt: task.created_at || new Date().toISOString(),
+          status: (task.status as 'To Do' | 'In Progress' | 'Completed') || 'To Do',
+          due_date: task.due_date || new Date().toISOString(),
+          assigned_to: task.assigned_to ? task.assigned_to.toString() : null,
+          project_id: task.project_id.toString(),
+          project_name: task.projects?.name || 'Unknown Project',
+          created_at: task.created_at || new Date().toISOString(),
         }));
+
         setTasks(mappedTasks);
       }
     } catch (err) {
@@ -59,14 +94,16 @@ const Calendar = () => {
 
   // Load tasks on component mount
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (user) {
+      fetchTasks();
+    }
+  }, [user]);
 
   // Get tasks for a specific date
   const getTasksForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
     return tasks.filter(task => {
-      const taskDate = new Date(task.dueDate).toISOString().split('T')[0];
+      const taskDate = new Date(task.due_date).toISOString().split('T')[0];
       return taskDate === dateStr;
     });
   };
@@ -80,9 +117,9 @@ const Calendar = () => {
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     return tasks.filter(task => {
-      const taskDate = new Date(task.dueDate);
+      const taskDate = new Date(task.due_date);
       return taskDate >= today && taskDate <= nextWeek;
-    }).sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime());
+    }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   };
 
   const upcomingTasks = getUpcomingTasks();
@@ -94,7 +131,7 @@ const Calendar = () => {
         return 'bg-gray-100 text-gray-800';
       case 'In Progress':
         return 'bg-blue-100 text-blue-800';
-      case 'Done':
+      case 'Completed':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -111,16 +148,13 @@ const Calendar = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Calendar</h1>
-          <p className="text-gray-600 mt-1">Manage your schedule and task deadlines</p>
+          <p className="text-gray-600 mt-1">View task deadlines from your projects</p>
         </div>
         <div className="flex space-x-2">
           <Button onClick={fetchTasks} variant="outline">
             Refresh Tasks
           </Button>
-          <Button className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Task
-          </Button>
+
         </div>
       </div>
 
@@ -165,9 +199,9 @@ const Calendar = () => {
                       {selectedDateTasks.map((task) => (
                         <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <CheckCircle className={`h-5 w-5 ${task.status === 'Done' ? 'text-green-500' : 'text-gray-300'}`} />
+                            <CheckCircle className={`h-5 w-5 ${task.status === 'Completed' ? 'text-green-500' : 'text-gray-300'}`} />
                             <div>
-                              <p className={`font-medium ${task.status === 'Done' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                              <p className={`font-medium ${task.status === 'Completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                                 {task.title}
                               </p>
                               <p className="text-sm text-gray-600">{task.description || 'No description'}</p>
@@ -179,7 +213,7 @@ const Calendar = () => {
                             </Badge>
                             <div className="flex items-center text-sm text-gray-500">
                               <User className="h-4 w-4 mr-1" />
-                              {task.assignee}
+                              {task.assigned_to ? (task.assigned_to.includes('@') ? task.assigned_to.split('@')[0] : task.assigned_to) : 'Unassigned'}
                             </div>
                           </div>
                         </div>
@@ -219,7 +253,7 @@ const Calendar = () => {
                       </div>
                       <div className="flex items-center text-xs text-gray-500 mt-1">
                         <Clock className="h-3 w-3 mr-1" />
-                        Due {new Date(task.dueDate).toLocaleDateString()}
+                        Due {new Date(task.due_date).toLocaleDateString()}
                       </div>
                     </div>
                   ))}
@@ -262,28 +296,13 @@ const Calendar = () => {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-600">Completed</span>
                 <span className="font-semibold text-green-600">
-                  {tasks.filter(t => t.status === 'Done').length}
+                  {tasks.filter(t => t.status === 'Completed').length}
                 </span>
               </div>
             </CardContent>
           </Card>
 
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" onClick={() => window.location.href = '/tasks'}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Task
-              </Button>
-              <Button variant="outline" className="w-full justify-start" onClick={() => window.location.href = '/projects'}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Project
-              </Button>
-            </CardContent>
-          </Card>
+          
         </div>
       </div>
     </div>

@@ -64,7 +64,7 @@ const CreateProjectDialog: React.FC<CreateProjectDialogProps> = ({
       status: formData.status,
       progress: 0,
       dueDate: date ? date.toISOString() : new Date().toISOString(),
-      teamMembers: ['JD'], // Default to current user
+      teamMembers: [], // Start with empty team, owner is separate
     };
 
     onCreateProject(project);

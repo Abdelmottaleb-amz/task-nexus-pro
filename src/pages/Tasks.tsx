@@ -12,66 +12,76 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import CreateTaskDialog from '../components/CreateTaskDialog';
-import EditTaskDialog from '../components/EditTaskDialog';
+
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Task {
   id: string;
   title: string;
   description: string;
-  status: 'To Do' | 'In Progress' | 'Done';
-  priority: 'Low' | 'Medium' | 'High';
-  assignee: string;
-  project: string;
-  dueDate: string;
-  createdAt: string;
-  // Database fields (for mapping)
-  assigned_to?: number | null;
-  due_date?: string | null;
-  project_id?: number | null;
+  status: 'To Do' | 'In Progress' | 'Completed';
+  due_date: string;
+  assigned_to: string | null;
+  project_id: string;
+  project_name?: string;
   created_at?: string;
 }
 
 const Tasks = () => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
 
 
-  // Fetch tasks from database
+
+  // Fetch tasks assigned to current user
   const fetchTasks = async () => {
+    if (!user) return [];
+
     try {
       const { data, error } = await supabase
         .from('tasks')
-        .select('id, title, description, status, due_date, project_id, assigned_to, created_at');
+        .select(`
+          id,
+          title,
+          description,
+          status,
+          due_date,
+          project_id,
+          assigned_to,
+          created_at,
+          projects (
+            name
+          )
+        `)
+        .or(`assigned_to.eq.${user.email},assigned_to.eq.${user.id}`)
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching tasks:', error);
+        console.error('Error fetching user tasks:', error);
         return [];
       }
 
-      console.log('Raw tasks data from Supabase:', data);
+      console.log('Raw user tasks data from Supabase:', data);
 
       if (!data) {
-        console.log('No tasks data returned from Supabase');
+        console.log('No user tasks data returned from Supabase');
         return [];
       }
 
       // Map database fields to frontend interface
       return data.map(task => ({
-        id: task.id.toString(),
+        id: task.id,
         title: task.title || '',
         description: task.description || '',
-        status: (task.status as 'To Do' | 'In Progress' | 'Done') || 'To Do',
-        priority: 'Medium' as 'Low' | 'Medium' | 'High', // Default priority since not in DB
-        assignee: task.assigned_to ? `User${task.assigned_to}` : 'Unassigned',
-        project: task.project_id ? `Project${task.project_id}` : 'No Project',
-        dueDate: task.due_date || new Date().toISOString(),
-        createdAt: task.created_at || new Date().toISOString(),
+        status: (task.status as 'To Do' | 'In Progress' | 'Completed') || 'To Do',
+        due_date: task.due_date || new Date().toISOString(),
+        assigned_to: task.assigned_to,
+        project_id: task.project_id,
+        project_name: task.projects?.name || 'Unknown Project',
+        created_at: task.created_at || new Date().toISOString(),
       }));
     } catch (err) {
       console.error('Exception in fetchTasks:', err);
@@ -83,12 +93,14 @@ const Tasks = () => {
   useEffect(() => {
     const loadTasks = async () => {
       const fetchedTasks = await fetchTasks();
-      console.log('Fetched tasks:', fetchedTasks);
+      console.log('Fetched user tasks:', fetchedTasks);
       setTasks(fetchedTasks);
     };
 
-    loadTasks();
-  }, []);
+    if (user) {
+      loadTasks();
+    }
+  }, [user]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -96,25 +108,14 @@ const Tasks = () => {
         return 'bg-gray-100 text-gray-800';
       case 'In Progress':
         return 'bg-blue-100 text-blue-800';
-      case 'Done':
+      case 'Completed':
         return 'bg-green-100 text-green-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-100 text-red-800';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+
 
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -123,92 +124,18 @@ const Tasks = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const handleCreateTask = async (newTask: Omit<Task, 'id' | 'createdAt'>) => {
-    try {
-      const { data, error } = await supabase
-        .from('tasks')
-        .insert({
-          title: newTask.title,
-          description: newTask.description,
-          status: newTask.status,
-          due_date: newTask.dueDate,
-          project_id: null, // Will be updated when projects are linked
-          assigned_to: null, // Will be updated when users are linked
-        })
-        .select()
-        .single();
 
-      if (error) {
-        console.error('Error creating task:', error);
-        alert(`Error creating task: ${error.message}`);
-        return;
-      }
 
-      // Refresh the tasks list
-      const fetchedTasks = await fetchTasks();
-      setTasks(fetchedTasks);
-    } catch (error) {
-      console.error('Error creating task:', error);
-      alert(`Error creating task: ${error}`);
-    }
-  };
 
-  const handleEditTask = async (updatedTask: Task) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .update({
-          title: updatedTask.title,
-          description: updatedTask.description,
-          status: updatedTask.status,
-          due_date: updatedTask.dueDate,
-        })
-        .eq('id', parseInt(updatedTask.id));
 
-      if (error) {
-        console.error('Error updating task:', error);
-        alert(`Error updating task: ${error.message}`);
-        return;
-      }
 
-      // Refresh the tasks list
-      const fetchedTasks = await fetchTasks();
-      setTasks(fetchedTasks);
-      setSelectedTask(null);
-    } catch (error) {
-      console.error('Error updating task:', error);
-      alert(`Error updating task: ${error}`);
-    }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    try {
-      const { error } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', parseInt(taskId));
-
-      if (error) {
-        console.error('Error deleting task:', error);
-        alert(`Error deleting task: ${error.message}`);
-        return;
-      }
-
-      // Refresh the tasks list
-      const fetchedTasks = await fetchTasks();
-      setTasks(fetchedTasks);
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      alert(`Error deleting task: ${error}`);
-    }
-  };
 
   const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
     try {
       const { error } = await supabase
         .from('tasks')
         .update({ status: newStatus })
-        .eq('id', parseInt(taskId));
+        .eq('id', taskId);
 
       if (error) {
         console.error('Error updating task status:', error);
@@ -230,14 +157,8 @@ const Tasks = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-gray-600 mt-1">Manage and track individual tasks</p>
-        </div>
-        <div className="flex space-x-2">
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
+          <h1 className="text-3xl font-bold text-gray-900">My Tasks</h1>
+          <p className="text-gray-600 mt-1">Tasks assigned to you across all projects</p>
         </div>
       </div>
 
@@ -263,7 +184,7 @@ const Tasks = () => {
             <DropdownMenuItem onClick={() => setStatusFilter('All')}>All</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setStatusFilter('To Do')}>To Do</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setStatusFilter('In Progress')}>In Progress</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setStatusFilter('Done')}>Done</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setStatusFilter('Completed')}>Completed</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -279,19 +200,16 @@ const Tasks = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleStatusChange(task.id, task.status === 'Done' ? 'To Do' : 'Done')}
+                      onClick={() => handleStatusChange(task.id, task.status === 'Completed' ? 'To Do' : 'Completed')}
                       className="p-0 h-6 w-6"
                     >
-                      <CheckCircle className={`h-5 w-5 ${task.status === 'Done' ? 'text-green-500' : 'text-gray-300'}`} />
+                      <CheckCircle className={`h-5 w-5 ${task.status === 'Completed' ? 'text-green-500' : 'text-gray-300'}`} />
                     </Button>
-                    <h3 className={`font-semibold text-lg ${task.status === 'Done' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                    <h3 className={`font-semibold text-lg ${task.status === 'Completed' ? 'line-through text-gray-500' : 'text-gray-900'}`}>
                       {task.title}
                     </h3>
                     <Badge className={getStatusColor(task.status)}>
                       {task.status}
-                    </Badge>
-                    <Badge className={getPriorityColor(task.priority)}>
-                      {task.priority}
                     </Badge>
                   </div>
                   
@@ -301,43 +219,20 @@ const Tasks = () => {
                     <div className="flex items-center">
                       <User className="h-4 w-4 mr-1" />
                       <Avatar className="h-6 w-6 mr-2">
-                        <AvatarFallback className="text-xs">{task.assignee}</AvatarFallback>
+                        <AvatarFallback className="text-xs">
+                          {task.assigned_to ? task.assigned_to.substring(0, 2).toUpperCase() : 'UN'}
+                        </AvatarFallback>
                       </Avatar>
-                      {task.assignee}
+                      {task.assigned_to ? (task.assigned_to.includes('@') ? task.assigned_to.split('@')[0] : task.assigned_to) : 'Unassigned'}
                     </div>
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 mr-1" />
-                      Due {new Date(task.dueDate).toLocaleDateString()}
+                      Due {new Date(task.due_date).toLocaleDateString()}
                     </div>
-                    <div>Project: {task.project}</div>
+                    <div>Project: {task.project_name}</div>
                   </div>
                 </div>
                 
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem 
-                      onClick={() => {
-                        setSelectedTask(task);
-                        setEditDialogOpen(true);
-                      }}
-                    >
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => handleDeleteTask(task.id)}
-                      className="text-red-600"
-                    >
-                      <Trash className="mr-2 h-4 w-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </CardContent>
           </Card>
@@ -350,32 +245,13 @@ const Tasks = () => {
           <p className="text-gray-600 mb-4">
             {searchTerm || statusFilter !== 'All' 
               ? 'Try adjusting your search or filters' 
-              : 'Get started by creating your first task'
+              : 'Get started by joining a project'
             }
           </p>
-          {!searchTerm && statusFilter === 'All' && (
-            <Button onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Create Task
-            </Button>
-          )}
         </div>
       )}
 
-      <CreateTaskDialog 
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onCreateTask={handleCreateTask}
-      />
 
-      {selectedTask && (
-        <EditTaskDialog 
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-          task={selectedTask}
-          onEditTask={handleEditTask}
-        />
-      )}
     </div>
   );
 };
