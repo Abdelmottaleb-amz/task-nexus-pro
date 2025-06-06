@@ -15,10 +15,13 @@ import { Badge } from '@/components/ui/badge';
 interface Project {
   id: string;
   name: string;
+  description?: string;
   progress: number;
   dueDate: string;
-  team: string[];
+  teamMembers: string[];
   status: string;
+  taskCount?: number;
+  completedTasks?: number;
 }
 
 interface ProjectCardProps {
@@ -78,14 +81,21 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project }) => {
         <div className="flex items-center space-x-1">
           <Users className="h-4 w-4 text-gray-400" />
           <div className="flex -space-x-1">
-            {project.team.slice(0, 3).map((member, index) => (
-              <Avatar key={index} className="h-6 w-6 border-2 border-white">
-                <AvatarFallback className="text-xs">{member}</AvatarFallback>
-              </Avatar>
-            ))}
-            {project.team.length > 3 && (
+            {project.teamMembers.slice(0, 3).map((member, index) => {
+              // Extract initials from email or name
+              const initials = member.includes('@')
+                ? member.split('@')[0].substring(0, 2).toUpperCase()
+                : member.substring(0, 2).toUpperCase();
+
+              return (
+                <Avatar key={index} className="h-6 w-6 border-2 border-white">
+                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                </Avatar>
+              );
+            })}
+            {project.teamMembers.length > 3 && (
               <div className="h-6 w-6 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center">
-                <span className="text-xs text-gray-600">+{project.team.length - 3}</span>
+                <span className="text-xs text-gray-600">+{project.teamMembers.length - 3}</span>
               </div>
             )}
           </div>
