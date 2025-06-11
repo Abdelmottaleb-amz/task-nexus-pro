@@ -120,7 +120,7 @@ const Signup = () => {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900">Task Nexus Pro</h1>
+          <h1 className="text-3xl font-bold text-gray-900">TaskFlow</h1>
           <p className="mt-2 text-gray-600">Create your account</p>
         </div>
 

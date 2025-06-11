@@ -42,9 +42,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         {isOpen && (
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">PM</span>
+              <span className="text-white font-bold text-sm">TF</span>
             </div>
-            <span className="font-bold text-xl text-gray-900">ProjectHub</span>
+            <span className="font-bold text-xl text-gray-900">TaskFlow</span>
           </div>
         )}
         <Button

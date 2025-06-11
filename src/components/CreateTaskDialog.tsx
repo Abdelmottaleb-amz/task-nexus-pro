@@ -64,6 +64,8 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     ...(ownerEmail ? [ownerEmail] : []),
     ...teamMembers
   ].filter((member, index, arr) => arr.indexOf(member) === index);
+  console.log('All members:', allMembers);
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
