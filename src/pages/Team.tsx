@@ -38,12 +38,11 @@ const Team = () => {
     try {
       setLoading(true);
 
-      // Get all projects where user is owner or team member
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('id, name, owner_id, team_members')
         .or(`owner_id.eq.${user.id},team_members.cs.{${user.email}},team_members.cs.{${user.id}}`);
-
+      
       if (projectsError) {
         console.error('Error fetching projects:', projectsError);
         return;
@@ -55,17 +54,14 @@ const Team = () => {
         return;
       }
 
-      console.log('Projects fetched:', projects);
-
-      // Get all unique team members from these projects
       const allMembers = new Set<string>();
       const memberProjects = new Map<string, string[]>();
       const ownerInfo = new Map<string, boolean>();
 
       projects.forEach(project => {
-        // Add project owner
         if (project.owner_id) {
           const ownerId = project.owner_id;
+          console.log('Owner ID:', ownerId);
           allMembers.add(ownerId);
           if (!memberProjects.has(ownerId)) {
             memberProjects.set(ownerId, []);
@@ -74,7 +70,6 @@ const Team = () => {
           ownerInfo.set(ownerId, true);
         }
 
-        // Add team members
         if (project.team_members && Array.isArray(project.team_members)) {
           project.team_members.forEach(member => {
             allMembers.add(member);
@@ -89,122 +84,71 @@ const Team = () => {
         }
       });
 
-      console.log('Team members:', allMembers);
-      console.log('Member projects:', memberProjects);
-      console.log('Owner info:', ownerInfo);
-
-      // Get task statistics
-      const projectIds = projects.map(p => Number(p.id)); // Ensure project IDs are numbers
-      console.log('Project IDs:', projectIds);
-      const { data: tasks, error: tasksError } = await supabase
-        .from('tasks')
-        .select('id, status')
-        .in('project_id', projectIds);
-
-      if (tasksError) {
-        console.error('Error fetching tasks:', tasksError);
-      }
-
-      const totalTasks = tasks?.length || 0;
-      const activeTasks = tasks?.filter(task => task.status !== 'Completed').length || 0;
-
-      console.log('Tasks fetched:', tasks);
-      console.log('Total tasks:', totalTasks);
-      console.log('Active tasks:', activeTasks);
-
-      // Create a user lookup map based on known user information
-      const userLookup = new Map<string, { name: string; email: string }>();
-
-      // Add current user to lookup
-      if (user.id && user.email) {
-        userLookup.set(user.id, {
-          name: user.user_metadata?.full_name || user.email.split('@')[0] || 'Current User',
-          email: user.email
-        });
-      }
-
-      // Add known users to lookup map
-      const knownUsers = [
-        { id: '0693da3f-10c4-469d-8439-3644b7fbb670', name: 'Abdo', email: 'souhaib.bouktiba@uit.ac.ma' },
-        { id: '7f4ea859-e733-4550-883f-675aad45b2e0', name: 'Sohaib', email: 'sohaibouktiba2004@gmail.com' }
-      ];
-
-      knownUsers.forEach(knownUser => {
-        userLookup.set(knownUser.id, {
-          name: knownUser.name,
-          email: knownUser.email
-        });
-      });
-
-      console.log('User lookup map:', userLookup);
-
-      // Create team member objects (excluding the current user)
       const teamMembersList: TeamMember[] = [];
 
       for (const member of Array.from(allMembers)) {
-        // Exclude the current authenticated user
-        if (member === user.id || member === user.email) {
-          continue;
-        }
+        console.log('Fetching member:', member);
+        // Check if member is a UUID
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(member);
+        
+        if (isUuid) {
+          try {
+            const { data: userData, error: userError } = await supabase.auth.admin.getUserById(member);
+            
+            if (userError || !userData) {
+              console.warn(`Failed to fetch user info for UUID: ${member}`, userError);
+              teamMembersList.push({
+                id: member,
+                email: 'unknown@example.com',
+                name: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+                role: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+                projects: memberProjects.get(member) || [],
+                isOwner: ownerInfo.get(member) || false
+              });
+              continue;
+            }
 
-        const isEmail = member.includes('@');
-        let displayName = '';
-        let email = '';
-        const userInfo = userLookup.get(member);
+            const fullName = userData.user?.user_metadata?.full_name || 
+                             userData.user?.email?.split('@')[0] || 
+                             'Unknown User';
 
-        if (userInfo) {
-          displayName = userInfo.name;
-          email = userInfo.email;
-          console.log(`Found user info for ${member}:`, userInfo);
-        } else if (isEmail) {
-          const emailName = member.split('@')[0];
-
-          if (emailName.includes('.')) {
-            const nameParts = emailName.split('.');
-            displayName = nameParts.map(part =>
-              part.charAt(0).toUpperCase() + part.slice(1)
-            ).join(' ');
-          } else if (emailName.includes('_')) {
-            const nameParts = emailName.split('_');
-            displayName = nameParts.map(part =>
-              part.charAt(0).toUpperCase() + part.slice(1)
-            ).join(' ');
-          } else if (emailName.includes('-')) {
-            const nameParts = emailName.split('-');
-            displayName = nameParts.map(part =>
-              part.charAt(0).toUpperCase() + part.slice(1)
-            ).join(' ');
-          } else {
-            // No separator, use the whole email name
-            displayName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+            teamMembersList.push({
+              id: userData.user?.id || member,
+              email: userData.user?.email || 'unknown@example.com',
+              name: fullName,
+              role: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+              projects: memberProjects.get(member) || [],
+              isOwner: ownerInfo.get(member) || false
+            });
+          } catch (error) {
+            console.error('Error fetching user by UUID:', error);
+            teamMembersList.push({
+              id: member,
+              email: 'unknown@example.com',
+              name: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+              role: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+              projects: memberProjects.get(member) || [],
+              isOwner: ownerInfo.get(member) || false
+            });
           }
-
-          email = member;
         } else {
-          
-          console.warn(`Unknown user ID: ${member}`);
-          const isOwner = ownerInfo.get(member);
-          displayName = isOwner ? 'Unknown Project Owner' : 'Unknown Team Member';
-          email = `user-${member.substring(0, 8)}@example.com`;
+          // Handle non-UUID members (emails)
+          teamMembersList.push({
+            id: member,
+            email: member,
+            name: member.split('@')[0],
+            role: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
+            projects: memberProjects.get(member) || [],
+            isOwner: ownerInfo.get(member) || false
+          });
         }
-
-        teamMembersList.push({
-          id: member,
-          email: email,
-          name: displayName, 
-          role: ownerInfo.get(member) ? 'Project Owner' : 'Team Member',
-          projects: memberProjects.get(member) || [],
-          isOwner: ownerInfo.get(member) || false
-        });
       }
-
-      console.log('Final team members list:', teamMembersList);
 
       setTeamMembers(teamMembersList);
       setStats({
         totalProjects: projects.length,
-        totalTasks,
-        activeTasks
+        totalTasks: 0, // Placeholder for task stats
+        activeTasks: 0 // Placeholder for task stats
       });
 
     } catch (error) {
