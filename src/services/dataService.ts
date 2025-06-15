@@ -11,15 +11,15 @@ export interface DashboardStats {
 }
 
 export interface ProjectData {
-  id: string;
+  id: string; // Changed to string to match urlid
   name: string;
   description: string;
   status: 'Planning' | 'In Progress' | 'On Hold' | 'Completed';
   progress: number;
   dueDate: string;
-  teamMembers: string[];
+  teamMembers: string[]; // Changed to string[] to match _text
   createdAt: string;
-  ownerId: string;
+  ownerId: string; // Changed to string to match urlid
   accessCode?: string;
   isOwner?: boolean;
   taskCount?: number;
@@ -27,16 +27,16 @@ export interface ProjectData {
 }
 
 export interface TaskData {
-  id: string;
+  id: number;
   title: string;
   description: string;
   status: 'To Do' | 'In Progress' | 'Completed';
   dueDate: string;
-  assignedTo: string | null;
-  projectId: string;
-  projectName?: string;
+  assignedTo: string; // Changed to string to match urlid
+  projectId: number;
+  projectName: string;
   createdAt: string;
-  priority?: 'High' | 'Medium' | 'Low';
+  priority: 'Low' | 'Medium' | 'High';
 }
 
 export interface ActivityData {
@@ -58,42 +58,49 @@ export interface UserData {
 }
 
 class DataService {
-  // Fetch dashboard statistics
   async getDashboardStats(user: User): Promise<DashboardStats> {
     try {
-      // Get projects where user is owner or team member
       const { data: projects, error: projectsError } = await supabase
         .from('projects')
         .select('id, status, team_members, owner_id')
-        .or(`owner_id.eq.${user.id},team_members.cs.{${user.email}},team_members.cs.{${user.id}}`);
+        .or(`owner_id.eq.${user.id},team_members.cs.{${user.id}}`);
 
       if (projectsError) throw projectsError;
 
-      // Get tasks assigned to user
       const { data: tasks, error: tasksError } = await supabase
         .from('tasks')
-        .select('id, status, due_date')
-        .or(`assigned_to.eq.${user.email},assigned_to.eq.${user.id}`);
+        .select('id, status, due_date, project_id, assigned_to, projects (name)')
+        .eq('assigned_to', user.id);
 
       if (tasksError) throw tasksError;
 
-      // Calculate stats
+      const mappedTasks = tasks?.map(task => ({
+        id: task.id,
+        title: task.title || '',
+        description: task.description || '',
+        status: (task.status as 'To Do' | 'In Progress' | 'Completed') || 'To Do',
+        dueDate: task.due_date || new Date().toISOString(),
+        assignedTo: task.assigned_to.toString(), // Convert to string
+        projectId: task.project_id,
+        projectName: task.projects?.name || 'Unknown Project',
+        createdAt: task.created_at || new Date().toISOString(),
+        priority: (task.priority as 'Low' | 'Medium' | 'High') || 'Medium', // Use actual priority
+      }));
+
       const totalProjects = projects?.length || 0;
       const activeProjects = projects?.filter(p => p.status === 'In Progress').length || 0;
-      const totalTasks = tasks?.length || 0;
-      const activeTasks = tasks?.filter(t => t.status !== 'Completed').length || 0;
+      const totalTasks = mappedTasks?.length || 0;
+      const activeTasks = mappedTasks?.filter(t => t.status !== 'Completed').length || 0;
       
-      // Tasks due in next 7 days
       const nextWeek = new Date();
       nextWeek.setDate(nextWeek.getDate() + 7);
-      const dueSoonTasks = tasks?.filter(t => 
-        t.due_date && 
-        new Date(t.due_date) <= nextWeek && 
+      const dueSoonTasks = mappedTasks?.filter(t => 
+        t.dueDate && 
+        new Date(t.dueDate) <= nextWeek && 
         t.status !== 'Completed'
       ).length || 0;
 
-      // Count unique team members
-      const allMembers = new Set<string>();
+      const allMembers = new Set<string>(); // Changed to string
       projects?.forEach(project => {
         if (project.team_members) {
           project.team_members.forEach(member => allMembers.add(member));
@@ -103,34 +110,28 @@ class DataService {
         }
       });
 
+      const teamMembers = allMembers.size;
+
       return {
         totalProjects,
         activeProjects,
         totalTasks,
         activeTasks,
         dueSoonTasks,
-        teamMembers: allMembers.size
+        teamMembers,
       };
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
-      return {
-        totalProjects: 0,
-        activeProjects: 0,
-        totalTasks: 0,
-        activeTasks: 0,
-        dueSoonTasks: 0,
-        teamMembers: 0
-      };
+      throw error;
     }
   }
 
-  // Fetch recent projects
   async getRecentProjects(user: User, limit: number = 3): Promise<ProjectData[]> {
     try {
       const { data: projects, error } = await supabase
         .from('projects')
         .select('*')
-        .or(`owner_id.eq.${user.id},team_members.cs.{${user.email}},team_members.cs.{${user.id}}`)
+        .or(`owner_id.eq.${user.id},team_members.cs.{${user.id}}`)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -138,7 +139,6 @@ class DataService {
 
       if (!projects) return [];
 
-      // Get task counts for each project
       const projectsWithTasks = await Promise.all(
         projects.map(async (project) => {
           const { data: tasks } = await supabase
@@ -150,7 +150,7 @@ class DataService {
           const completedTasks = tasks?.filter(t => t.status === 'Completed').length || 0;
 
           return {
-            id: project.id,
+            id: project.id.toString(),
             name: project.name,
             description: project.description || '',
             status: project.status as 'Planning' | 'In Progress' | 'On Hold' | 'Completed',
@@ -158,7 +158,7 @@ class DataService {
             dueDate: project.due_date || new Date().toISOString(),
             teamMembers: project.team_members || [],
             createdAt: project.created_at,
-            ownerId: project.owner_id,
+            ownerId: project.owner_id.toString(),
             accessCode: project.access_code || '',
             isOwner: project.owner_id === user.id,
             taskCount,
@@ -174,7 +174,6 @@ class DataService {
     }
   }
 
-  // Fetch recent tasks
   async getRecentTasks(user: User, limit: number = 5): Promise<TaskData[]> {
     try {
       const { data: tasks, error } = await supabase
@@ -188,11 +187,12 @@ class DataService {
           assigned_to,
           project_id,
           created_at,
+          priority,
           projects (
             name
           )
         `)
-        .or(`assigned_to.eq.${user.email},assigned_to.eq.${user.id}`)
+        .eq('assigned_to', user.id)
         .order('created_at', { ascending: false })
         .limit(limit);
 
@@ -201,16 +201,16 @@ class DataService {
       if (!tasks) return [];
 
       return tasks.map(task => ({
-        id: task.id.toString(),
+        id: task.id,
         title: task.title || '',
         description: task.description || '',
         status: task.status as 'To Do' | 'In Progress' | 'Completed',
         dueDate: task.due_date || new Date().toISOString(),
-        assignedTo: task.assigned_to,
-        projectId: task.project_id?.toString() || '',
-        projectName: (task.projects as any)?.name || 'Unknown Project',
+        assignedTo: task.assigned_to.toString(),
+        projectId: task.project_id,
+        projectName: task.projects?.name || 'Unknown Project',
         createdAt: task.created_at,
-        priority: 'Medium' // Default priority since it's not in the schema
+        priority: (task.priority as 'Low' | 'Medium' | 'High') || 'Medium',
       }));
     } catch (error) {
       console.error('Error fetching recent tasks:', error);
@@ -218,7 +218,6 @@ class DataService {
     }
   }
 
-  // Fetch users from the users table
   async getUsers(): Promise<UserData[]> {
     try {
       const { data: users, error } = await supabase
@@ -242,16 +241,13 @@ class DataService {
     }
   }
 
-  // Generate mock recent activity (since we don't have an activity table yet)
   async getRecentActivity(user: User, limit: number = 4): Promise<ActivityData[]> {
     try {
-      // Get recent tasks and projects for activity
       const recentTasks = await this.getRecentTasks(user, 3);
       const recentProjects = await this.getRecentProjects(user, 2);
 
       const activities: ActivityData[] = [];
 
-      // Add task activities
       recentTasks.forEach((task, index) => {
         activities.push({
           id: `task-${task.id}`,
@@ -262,12 +258,11 @@ class DataService {
             ? `completed "${task.title}" task`
             : `created "${task.title}" task`,
           time: this.getRelativeTime(task.createdAt),
-          projectId: task.projectId,
-          taskId: task.id
+          projectId: task.projectId.toString(),
+          taskId: task.id.toString()
         });
       });
 
-      // Add project activities
       recentProjects.forEach((project, index) => {
         activities.push({
           id: `project-${project.id}`,
@@ -280,7 +275,6 @@ class DataService {
         });
       });
 
-      // Sort by time and limit
       return activities
         .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
         .slice(0, limit);

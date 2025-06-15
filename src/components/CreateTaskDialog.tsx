@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Plus, Calendar, User } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Task {
   id?: string;
@@ -31,14 +31,21 @@ interface Task {
   project_id: string;
 }
 
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
+
 interface CreateTaskDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreateTask: (task: Omit<Task, 'id'>) => Promise<void>;
   projectId: string;
-  teamMembers: string[];
+  teamMembers: string[]; // Array of user IDs or emails
   ownerEmail?: string;
-  task?: Task | null; // For editing existing tasks
+  ownerId?: string; // Add owner ID
+  task?: Task | null;
 }
 
 const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
@@ -48,6 +55,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   projectId,
   teamMembers,
   ownerEmail,
+  ownerId,
   task
 }) => {
   const [formData, setFormData] = useState({
@@ -59,13 +67,96 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
+  const [fetchingUsers, setFetchingUsers] = useState(false);
 
-  const allMembers = [
-    ...(ownerEmail ? [ownerEmail] : []),
-    ...teamMembers
-  ].filter((member, index, arr) => arr.indexOf(member) === index);
-  console.log('All members:', allMembers);
-  
+  // Helper function to validate UUID format
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  // Fetch user profiles when dialog opens or team members change
+  useEffect(() => {
+    if (open && (teamMembers.length > 0 || ownerId || ownerEmail)) {
+      fetchUserProfiles();
+    }
+  }, [open, teamMembers, ownerId, ownerEmail]);
+
+  const fetchUserProfiles = async () => {
+    setFetchingUsers(true);
+    const profiles: UserProfile[] = [];
+    
+    try {
+      // Create array of all user identifiers (owner + team members)
+      const allUserIdentifiers = [
+        ...(ownerId ? [ownerId] : []),
+        ...(ownerEmail && !ownerId ? [ownerEmail] : []),
+        ...teamMembers
+      ].filter((id, index, arr) => arr.indexOf(id) === index); // Remove duplicates
+
+      console.log('Fetching profiles for identifiers:', allUserIdentifiers);
+
+      // Fetch each user's profile
+      for (const identifier of allUserIdentifiers) {
+        try {
+          let userData, userError;
+
+          // Check if identifier is a UUID or email
+          if (isValidUUID(identifier)) {
+            // It's a UUID, use getUserById
+            console.log(`Fetching user profile by ID: ${identifier}`);
+            const result = await supabase.auth.admin.getUserById(identifier);
+            userData = result.data;
+            userError = result.error;
+          } else if (identifier.includes('@')) {
+            // It's an email, use listUsers with email filter
+            console.log(`Fetching user profile by email: ${identifier}`);
+            const { data: usersData, error } = await supabase.auth.admin.listUsers();
+            
+            if (error) {
+              userError = error;
+            } else {
+              // Find user by email
+              const foundUser = usersData.users.find(user => user.email === identifier);
+              if (foundUser) {
+                userData = { user: foundUser };
+              } else {
+                console.warn(`User not found with email: ${identifier}`);
+                continue;
+              }
+            }
+          } else {
+            console.error(`Invalid identifier format: ${identifier}`);
+            continue;
+          }
+          
+          if (userError) {
+            console.error(`Error fetching user ${identifier}:`, userError);
+            continue;
+          }
+
+          if (userData?.user) {
+            profiles.push({
+              id: userData.user.id,
+              email: userData.user.email || '',
+              full_name: userData.user.user_metadata?.full_name || userData.user.user_metadata?.name || null
+            });
+            console.log(`Successfully fetched profile for ${userData.user.email}`);
+          }
+        } catch (err) {
+          console.error(`Error fetching user ${identifier}:`, err);
+        }
+      }
+
+      console.log('Final user profiles:', profiles);
+      setUserProfiles(profiles);
+    } catch (err) {
+      console.error('Error fetching user profiles:', err);
+    } finally {
+      setFetchingUsers(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +202,18 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       [field]: value
     }));
     if (error) setError('');
+  };
+
+  const getUserDisplayName = (profile: UserProfile) => {
+    if (profile.full_name) {
+      return profile.full_name;
+    }
+    // Fallback to email username if no full name
+    return profile.email.split('@')[0];
+  };
+
+  const isOwner = (userId: string) => {
+    return ownerId === userId;
   };
 
   return (
@@ -181,18 +284,19 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             <Select
               value={formData.assigned_to}
               onValueChange={(value) => handleInputChange('assigned_to', value)}
+              disabled={fetchingUsers}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Select team member" />
+                <SelectValue placeholder={fetchingUsers ? "Loading users..." : "Select team member"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
-                {allMembers.map((member) => (
-                  <SelectItem key={member} value={member}>
+                {userProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id}>
                     <div className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      {member.includes('@') ? member.split('@')[0] : member}
-                      {member === ownerEmail && ' (Owner)'}
+                      {getUserDisplayName(profile)}
+                      {isOwner(profile.id) && ' (Owner)'}
                     </div>
                   </SelectItem>
                 ))}

@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Calendar as CalendarIcon, Plus, Clock, User, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +14,7 @@ interface Task {
   status: 'To Do' | 'In Progress' | 'Completed';
   due_date: string;
   assigned_to: string | null;
+  assigned_to_name: string | null;
   project_id: string;
   project_name?: string;
   created_at?: string;
@@ -25,9 +25,12 @@ const Calendar = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [loading, setLoading] = useState(true);
+  
+  // Use ref for cache to avoid recreating functions
+  const userCacheRef = useRef<Record<string, string>>({});
 
   // Fetch tasks from projects where user is involved
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -70,17 +73,62 @@ const Calendar = () => {
           return isOwner || isTeamMember;
         });
 
+        // Helper function to get user name
+        const getUserName = async (userId: string): Promise<string> => {
+          // Check cache first
+          if (userCacheRef.current[userId]) {
+            return userCacheRef.current[userId];
+          }
+          
+          try {
+            // First try to get name from auth.users table
+            const { data: authUser } = await supabase.auth.admin.getUserById(userId);
+            if (authUser?.user?.user_metadata?.full_name) {
+              const name = authUser.user.user_metadata.full_name;
+              userCacheRef.current[userId] = name;
+              return name;
+            } 
+            
+            // If not found in auth, try public.users table
+            const { data: publicUser } = await supabase
+              .from('users')
+              .select('name')
+              .eq('id', userId)
+              .single();
+            
+            if (publicUser?.name) {
+              userCacheRef.current[userId] = publicUser.name;
+              return publicUser.name;
+            }
+            
+            // Fallback to user ID
+            return userId;
+          } catch (err) {
+            console.error('Error fetching user:', err);
+            return userId;
+          }
+        };
+
         // Map database fields to frontend interface
-        const mappedTasks = userTasks.map(task => ({
-          id: task.id.toString(),
-          title: task.title || '',
-          description: task.description || '',
-          status: (task.status as 'To Do' | 'In Progress' | 'Completed') || 'To Do',
-          due_date: task.due_date || new Date().toISOString(),
-          assigned_to: task.assigned_to ? task.assigned_to.toString() : null,
-          project_id: task.project_id.toString(),
-          project_name: task.projects?.name || 'Unknown Project',
-          created_at: task.created_at || new Date().toISOString(),
+        const mappedTasks = await Promise.all(userTasks.map(async task => {
+          let assignedName = 'Unassigned';
+          
+          if (task.assigned_to) {
+            assignedName = await getUserName(task.assigned_to);
+          }
+
+          return {
+            id: task.id.toString(),
+            title: task.title || '',
+            description: task.description || '',
+            status: (task.status as 'To Do' | 'In Progress' | 'Completed') || 'To Do',
+            due_date: task.due_date || new Date().toISOString(),
+            assigned_to: task.assigned_to ? task.assigned_to.toString() : null,
+            assigned_to_name: task.assigned_to ? assignedName : null,
+            project_id: task.project_id.toString(),
+            project_name: task.projects?.name || 'Unknown Project',
+            created_at: task.created_at || new Date().toISOString(),
+          };
         }));
 
         setTasks(mappedTasks);
@@ -90,15 +138,14 @@ const Calendar = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // Load tasks on component mount
   useEffect(() => {
     if (user) {
       fetchTasks();
     }
-  }, [user]);
-
+  }, [user, fetchTasks]);
   // Get tasks for a specific date
   const getTasksForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -114,10 +161,12 @@ const Calendar = () => {
   // Get upcoming tasks (next 7 days)
   const getUpcomingTasks = () => {
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Remove time part
     const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     return tasks.filter(task => {
       const taskDate = new Date(task.due_date);
+      taskDate.setHours(0, 0, 0, 0);
       return taskDate >= today && taskDate <= nextWeek;
     }).sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
   };
@@ -142,6 +191,7 @@ const Calendar = () => {
   const dateHasTasks = (date: Date) => {
     return getTasksForDate(date).length > 0;
   };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -154,7 +204,6 @@ const Calendar = () => {
           <Button onClick={fetchTasks} variant="outline">
             Refresh Tasks
           </Button>
-
         </div>
       </div>
 
@@ -213,7 +262,7 @@ const Calendar = () => {
                             </Badge>
                             <div className="flex items-center text-sm text-gray-500">
                               <User className="h-4 w-4 mr-1" />
-                              {task.assigned_to ? (task.assigned_to.includes('@') ? task.assigned_to.split('@')[0] : task.assigned_to) : 'Unassigned'}
+                              {task.assigned_to_name || 'Unassigned'}
                             </div>
                           </div>
                         </div>
@@ -255,6 +304,12 @@ const Calendar = () => {
                         <Clock className="h-3 w-3 mr-1" />
                         Due {new Date(task.due_date).toLocaleDateString()}
                       </div>
+                      {task.assigned_to_name && (
+                        <div className="flex items-center text-xs text-gray-500 mt-1">
+                          <User className="h-3 w-3 mr-1" />
+                          {task.assigned_to_name}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {upcomingTasks.length > 5 && (
@@ -301,8 +356,6 @@ const Calendar = () => {
               </div>
             </CardContent>
           </Card>
-
-          
         </div>
       </div>
     </div>

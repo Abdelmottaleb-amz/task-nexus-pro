@@ -18,13 +18,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface Task {
-  id: string;
+  id: number;
   title: string;
   description: string;
   status: 'To Do' | 'In Progress' | 'Completed';
   due_date: string;
-  assigned_to: string | null;
-  project_id: string;
+  assigned_to: number | null;
+  project_id: number;
   created_at?: string;
 }
 
@@ -52,6 +52,7 @@ const ProjectDetails = () => {
   const [activeTab, setActiveTab] = useState('tasks');
   const [createTaskDialogOpen, setCreateTaskDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [assignedUserNames, setAssignedUserNames] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (projectId && user) {
@@ -60,6 +61,80 @@ const ProjectDetails = () => {
     }
   }, [projectId, user]);
 
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      const userNames = await fetchColaboratorUserNames(tasks);
+      setColaboratorUserNames(userNames);
+    };
+
+    if (tasks.length) {
+      fetchUserNames();
+    }
+
+  }, [tasks]);
+  const [colaboratorUserNames, setColaboratorUserNames] = useState<Record<string, string>>({});
+  const fetchColaboratorUserNames = async (tasks: Task[]) => {
+    const userNames: Record<string, string> = {};
+  
+    for (const task of tasks) {
+      const colaborator = task.assigned_to;
+  
+        try {
+          const { data, error } = await supabase.auth.admin.getUserById(colaborator);
+  
+          if (error) {
+            console.error(`Error fetching user by ID ${colaborator}:`, error);
+            userNames[colaborator] = 'Unknown User';
+          } else {
+            userNames[colaborator] = data?.user?.user_metadata?.full_name || data?.user?.email.split('@')[0] || 'Unknown User';
+          }
+        } catch (err) {
+          console.error(`Unexpected error fetching user by ID ${colaborator}:`, err);
+          userNames[colaborator] = 'Unknown User';
+        }
+      
+    }
+  
+    return userNames;
+  };
+
+  useEffect(() => {
+    const fetchUserNames = async () => {
+      const userNames = await fetchAssignedUserNames(tasks);
+      setAssignedUserNames(userNames);
+    };
+
+    if (tasks.length) {
+      fetchUserNames();
+    }
+  }, [tasks]);
+
+  const fetchAssignedUserNames = async (tasks: Task[]) => {
+    const userNames: Record<number, string> = {};
+
+    for (const task of tasks) {
+      const assignedTo = task.assigned_to;
+
+      if (!assignedTo || userNames[assignedTo]) continue;
+
+      try {
+        const { data, error } = await supabase.auth.admin.getUserById(assignedTo.toString());
+
+        if (error) {
+          console.error(`Error fetching user by ID ${assignedTo}:`, error);
+          userNames[assignedTo] = 'Unknown User';
+        } else {
+          userNames[assignedTo] = data?.user?.user_metadata?.full_name || data?.user?.email.split('@')[0] || 'Unknown User';
+        }
+      } catch (err) {
+        console.error(`Unexpected error fetching user by ID ${assignedTo}:`, err);
+        userNames[assignedTo] = 'Unknown User';
+      }
+    }
+
+    return userNames;
+  };
+
   const fetchProjectDetails = async () => {
     if (!projectId || !user) return;
 
@@ -67,7 +142,7 @@ const ProjectDetails = () => {
       const { data, error } = await supabase
         .from('projects')
         .select('*')
-        .eq('id', projectId)
+        .eq('id', projectId) // Use projectId as a string
         .single();
 
       if (error) {
@@ -87,8 +162,6 @@ const ProjectDetails = () => {
         team_members: data.team_members || []
       };
 
-
-
       setProject(projectData);
     } catch (error) {
       console.error('Error fetching project:', error);
@@ -103,7 +176,7 @@ const ProjectDetails = () => {
       const { data, error } = await supabase
         .from('tasks')
         .select('*')
-        .eq('project_id', projectId)
+        .eq('project_id', Number(projectId)) // Convert projectId to number
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -111,7 +184,12 @@ const ProjectDetails = () => {
         return;
       }
 
-      setTasks(data || []);
+      setTasks(
+        (data || []).map(task => ({
+          ...task,
+          status: task.status as 'To Do' | 'In Progress' | 'Completed',
+        }))
+      );
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
@@ -214,11 +292,14 @@ const ProjectDetails = () => {
     }
   };
 
-  const getAssignedUserName = (assignedTo: string | null) => {
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
+
+  const getAssignedUserName = (assignedTo: number | null) => {
     if (!assignedTo) return 'Unassigned';
-    if (assignedTo === user?.id) return 'You';
-    if (assignedTo === user?.email) return 'You';
-    return assignedTo.includes('@') ? assignedTo.split('@')[0] : assignedTo;
+    return assignedUserNames[assignedTo] || 'Loading...';
   };
 
   const tasksByStatus = {
@@ -437,39 +518,20 @@ const ProjectDetails = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Project Owner */}
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex items-center space-x-3">
-                    <Avatar>
-                      <AvatarFallback>
-                        {user?.email?.substring(0, 2).toUpperCase() || 'OW'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="font-medium">
-                        {project.owner_id === user?.id ? 'You' : 'Project Owner'}
-                      </p>
-                      <p className="text-sm text-gray-500">Owner</p>
-                    </div>
-                    <Badge variant="secondary">Owner</Badge>
-                  </div>
-                </CardContent>
-              </Card>
               
               {/* Team Members */}
-              {project.team_members.map((member, index) => (
+              {Object.entries(colaboratorUserNames).map(([memberId, memberName], index) => (
                 <Card key={index}>
                   <CardContent className="p-4">
                     <div className="flex items-center space-x-3">
                       <Avatar>
                         <AvatarFallback>
-                          {member.substring(0, 2).toUpperCase()}
+                          {memberName.substring(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <p className="font-medium">
-                          {member === user?.email ? 'You' : member.split('@')[0]}
+                          {memberName}
                         </p>
                         <p className="text-sm text-gray-500">Member</p>
                       </div>

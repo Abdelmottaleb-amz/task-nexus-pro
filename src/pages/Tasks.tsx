@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Filter, MoreHorizontal, Calendar, User, Edit, Trash, CheckCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,19 +27,60 @@ interface Task {
   created_at?: string;
 }
 
+interface UserProfile {
+  id: string;
+  email: string;
+  full_name: string | null;
+}
+
 const Tasks = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [userProfiles, setUserProfiles] = useState<{[key: string]: UserProfile}>({});
 
+  // Helper function to validate UUID format
+  const isValidUUID = (str: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(str);
+  };
 
+  // Fetch user profile by ID
+  const fetchUserProfile = async (userId: string): Promise<UserProfile | null> => {
+    if (!isValidUUID(userId)) {
+      console.error(`Invalid UUID format for user ID: ${userId}`);
+      return null;
+    }
+
+    try {
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
+      
+      if (userError) {
+        console.error(`Error fetching user ${userId}:`, userError);
+        return null;
+      }
+
+      if (userData?.user) {
+        return {
+          id: userData.user.id,
+          email: userData.user.email || '',
+          full_name: userData.user.user_metadata?.full_name || userData.user.user_metadata?.name || null
+        };
+      }
+    } catch (err) {
+      console.error(`Error fetching user ${userId}:`, err);
+    }
+    
+    return null;
+  };
 
   // Fetch tasks assigned to current user
   const fetchTasks = async () => {
     if (!user) return [];
 
     try {
+      // Query tasks assigned to the current user's ID only
       const { data, error } = await supabase
         .from('tasks')
         .select(`
@@ -56,7 +96,7 @@ const Tasks = () => {
             name
           )
         `)
-        .or(`assigned_to.eq.${user.email},assigned_to.eq.${user.id}`)
+        .eq('assigned_to', user.id) // Only query by user ID, not email
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -70,6 +110,23 @@ const Tasks = () => {
         console.log('No user tasks data returned from Supabase');
         return [];
       }
+
+      // Collect unique user IDs for profile fetching
+      const userIds = [...new Set(data.map(task => task.assigned_to).filter(Boolean))];
+      
+      // Fetch user profiles for all assigned users
+      const profiles: {[key: string]: UserProfile} = {};
+      for (const userId of userIds) {
+        if (userId && !userProfiles[userId]) {
+          const profile = await fetchUserProfile(userId);
+          if (profile) {
+            profiles[userId] = profile;
+          }
+        }
+      }
+      
+      // Update user profiles state
+      setUserProfiles(prev => ({ ...prev, ...profiles }));
 
       // Map database fields to frontend interface
       return data.map(task => ({
@@ -115,20 +172,12 @@ const Tasks = () => {
     }
   };
 
-
-
   const filteredTasks = tasks.filter(task => {
     const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesStatus = statusFilter === 'All' || task.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
-
-
-
-
-
-
 
   const handleStatusChange = async (taskId: string, newStatus: Task['status']) => {
     try {
@@ -150,6 +199,43 @@ const Tasks = () => {
       console.error('Error updating task status:', error);
       alert(`Error updating task status: ${error}`);
     }
+  };
+
+  // Get display name for assigned user
+  const getAssignedUserDisplay = (assignedTo: string | null) => {
+    if (!assignedTo) return 'Unassigned';
+    
+    const profile = userProfiles[assignedTo];
+    if (profile) {
+      return profile.full_name || profile.email.split('@')[0];
+    }
+    
+    // Fallback: if it's an email, show username part
+    if (assignedTo.includes('@')) {
+      return assignedTo.split('@')[0];
+    }
+    
+    // Fallback: show first 8 characters of UUID
+    return assignedTo.substring(0, 8);
+  };
+
+  const getAvatarInitials = (assignedTo: string | null) => {
+    if (!assignedTo) return 'UN';
+    
+    const profile = userProfiles[assignedTo];
+    if (profile?.full_name) {
+      const names = profile.full_name.split(' ');
+      return names.length > 1 
+        ? `${names[0][0]}${names[1][0]}`.toUpperCase()
+        : names[0].substring(0, 2).toUpperCase();
+    }
+    
+    if (profile?.email) {
+      return profile.email.substring(0, 2).toUpperCase();
+    }
+    
+    // Fallback for UUID or other formats
+    return assignedTo.substring(0, 2).toUpperCase();
   };
 
   return (
@@ -220,10 +306,10 @@ const Tasks = () => {
                       <User className="h-4 w-4 mr-1" />
                       <Avatar className="h-6 w-6 mr-2">
                         <AvatarFallback className="text-xs">
-                          {task.assigned_to ? task.assigned_to.substring(0, 2).toUpperCase() : 'UN'}
+                          {getAvatarInitials(task.assigned_to)}
                         </AvatarFallback>
                       </Avatar>
-                      {task.assigned_to ? (task.assigned_to.includes('@') ? task.assigned_to.split('@')[0] : task.assigned_to) : 'Unassigned'}
+                      {getAssignedUserDisplay(task.assigned_to)}
                     </div>
                     <div className="flex items-center">
                       <Calendar className="h-4 w-4 mr-1" />
@@ -250,8 +336,6 @@ const Tasks = () => {
           </p>
         </div>
       )}
-
-
     </div>
   );
 };
