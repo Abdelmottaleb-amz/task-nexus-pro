@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import KanbanView from '@/components/KanbanView';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -157,7 +158,7 @@ const Tasks = () => {
     if (user) {
       loadTasks();
     }
-  }, [user]);
+  }, [user, fetchTasks]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -274,6 +275,9 @@ const Tasks = () => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Kanban View */}
+      <KanbanView tasks={tasks} onStatusChange={handleStatusChange} />
 
       {/* Tasks List */}
       <div className="space-y-4">
