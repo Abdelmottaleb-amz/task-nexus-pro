@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, MessageSquare, Users, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useAuth } from '@/contexts/AuthContext';
 import { dataService, ActivityData } from '@/services/dataService';
+import { useNavigate } from 'react-router-dom';
 
 interface Activity {
   id: string;
@@ -18,6 +18,7 @@ const RecentActivity = () => {
   const { user } = useAuth();
   const [activities, setActivities] = useState<ActivityData[]>([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchActivity = async () => {
@@ -75,7 +76,11 @@ const RecentActivity = () => {
           ))
         ) : activities.length > 0 ? (
           activities.map((activity) => (
-            <div key={activity.id} className="flex items-start space-x-3">
+            <div
+              key={activity.id}
+              className="flex items-start space-x-3 cursor-pointer"
+              onClick={() => navigate('/chat', { state: { roomName: activity.id, username: user?.email } })}
+            >
               <div className="flex-shrink-0 mt-1">
                 {getActivityIcon(activity.type)}
               </div>

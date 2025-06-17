@@ -117,6 +117,33 @@ export type Database = {
         }
         Relationships: []
       }
+      messages: {
+        Row: {
+          id: string
+          content: string
+          room: string
+          createdAt: string
+          sender_id: string
+          receiver_id: string
+        }
+        Insert: {
+          id?: string
+          content: string
+          room: string
+          createdAt?: string
+          sender_id: string
+          receiver_id: string
+        }
+        Update: {
+          id?: string
+          content?: string
+          room?: string
+          createdAt?: string
+          sender_id?: string
+          receiver_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -144,7 +171,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
