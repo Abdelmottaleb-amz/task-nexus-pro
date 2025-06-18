@@ -335,10 +335,7 @@ const Team = () => {
                     <Mail className="h-4 w-4 mr-1" />
                     Message
                   </Button>
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Phone className="h-4 w-4 mr-1" />
-                    Call
-                  </Button>
+                  
                 </div>
               </CardContent>
             </Card>

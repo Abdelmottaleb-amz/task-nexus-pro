@@ -26,12 +26,6 @@ const Chat: React.FC = () => {
 
   return (
     <div className="h-screen flex flex-col">
-      <div className="p-4 border-b">
-        <h1 className="text-xl font-bold">Chat Room: {roomName}</h1>
-        <p className="text-sm text-gray-600">
-          Chatting with user ID: {receiverId}
-        </p>
-      </div>
       <div className="flex-1">
         <RealtimeChat 
           roomName={roomName} 

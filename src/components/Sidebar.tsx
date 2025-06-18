@@ -57,17 +57,6 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle }) => {
         </Button>
       </div>
 
-      <div className="p-4">
-        <Button
-          className={cn(
-            'w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white',
-            !isOpen && 'px-2'
-          )}
-        >
-          <Plus className="h-4 w-4" />
-          {isOpen && <span className="ml-2">New Project</span>}
-        </Button>
-      </div>
 
       <nav className="mt-4 px-4 space-y-1">
         {navigation.map((item) => {
